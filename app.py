@@ -7,7 +7,7 @@ import tiktoken
 
 
 app = Flask(__name__)
-swagger = Swagger(app)
+
 
 log_formatter = logging.Formatter(
     '[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
@@ -59,8 +59,10 @@ DICT_OF_OPERATIONS = {
 # ==============================================================================
 # GUARD LAYER (Handles Authentication & Missing Parameters automatically)
 # ==============================================================================
-API_SECRET_KEY = os.getenv("API_SECRET_KEY", "my_secure_dev_key_123")
 
+
+API_SECRET_KEY = os.getenv("API_SECRET_KEY", "my_secure_dev_key_123")
+swagger = Swagger(app)
 
 def require_api_key(f):
     @wraps(f)
