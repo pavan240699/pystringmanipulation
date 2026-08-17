@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect, url_for
 from flasgger import Swagger
 from functools import wraps
 import os
@@ -91,7 +91,9 @@ def require_payload(required_fields):
 # ==============================================================================
 # 🚀 THE API ROUTE (You never need to edit this logic!)
 # ==============================================================================
-
+@app.route('/',methods=['GET'])
+def Home():
+    return redirect(url_for='apidocs')
 @app.route('/api/process', methods=['POST'])
 @require_api_key
 @require_payload(['operations', 'inputs'])
