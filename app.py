@@ -5,18 +5,13 @@ import os
 import logging
 import tiktoken
 
-
 app = Flask(__name__)
+log_formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
 
 
-log_formatter = logging.Formatter(
-    '[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
 # ==============================================================================
 # 🛠️ EDIT ZONE: ADD OR CHANGE YOUR OPERATIONS HERE
 # ==============================================================================
-
-
-
 def wordCount(text: str) -> int:
     """Counts words."""
     return len(text.split()) if text else 0
@@ -35,34 +30,34 @@ def textReverse(text: str) -> str:
 def textClean(text: str) -> str:
     """Trims starting and ending spaces."""
     return text.strip() if text else ""
-def textSplit(text: str) ->list:
+
+
+def textSplit(text: str) -> list:
     """give the list of strings"""
     return list(text.split())
 
+
 def count_openai_tokens(text: str, model_name: str = "gpt-4") -> int:
-    # Automatically get the correct encoding for the specified model
     encoding = tiktoken.encoding_for_model(model_name)
     num_tokens = len(encoding.encode(text))
     return num_tokens
 
 
-# Simply add your new function names to this registry list to active them!
 DICT_OF_OPERATIONS = {
     "wordCount": wordCount,
     "textUpper": textUpper,
     "textReverse": textReverse,
     "textClean": textClean,
     "textSplit": textSplit,
-    "textTokenCounter":count_openai_tokens
+    "textTokenCounter": count_openai_tokens
 }
 
 # ==============================================================================
 # GUARD LAYER (Handles Authentication & Missing Parameters automatically)
 # ==============================================================================
-
-
 API_SECRET_KEY = os.getenv("API_SECRET_KEY", "my_secure_dev_key_123")
 swagger = Swagger(app)
+
 
 def require_api_key(f):
     @wraps(f)
@@ -74,15 +69,26 @@ def require_api_key(f):
     return decorated
 
 
-def require_payload(required_fields):
+def require_payload():
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
+            # 1. Validate operations from query parameters
+            operations = request.args.getlist('operations')
+            if not operations:
+                return jsonify({"error": "Query parameter 'operations' must be a non-empty array"}), 400
+
+            # 2. Validate inputs from JSON body
             data = request.get_json(silent=True) or {}
-            for field in required_fields:
-                val = data.get(field)
-                if not val or not isinstance(val, list):
-                    return jsonify({"error": f"Field '{field}' must be a non-empty array"}), 400
+            inputs = data.get('inputs')
+
+            if not inputs or not isinstance(inputs, list):
+                return jsonify({"error": "Field 'inputs' must be a non-empty array in the JSON body"}), 400
+
+            for s in inputs:
+                if len(str(s)) > 128 or len(str(s)) == 0:
+                    return jsonify({"error": "input validation doesnt match expectations"}), 400
+
             return f(*args, **kwargs)
 
         return decorated
@@ -91,14 +97,16 @@ def require_payload(required_fields):
 
 
 # ==============================================================================
-# 🚀 THE API ROUTE (You never need to edit this logic!)
+# 🚀 THE API ROUTE
 # ==============================================================================
-@app.route('/',methods=['GET'])
+@app.route('/', methods=['GET'])
 def Home():
-    return redirect(url_for='apidocs')
+    return redirect(url_for('apidocs'))
+
+
 @app.route('/api/process', methods=['POST'])
 @require_api_key
-@require_payload(['operations', 'inputs'])
+@require_payload()
 def process_data():
     """
     Process multiple items with multiple logic engines simultaneously.
@@ -108,17 +116,21 @@ def process_data():
         in: header
         type: string
         required: true
+      - name: operations
+        in: query
+        type: array
+        items:
+          type: string
+        collectionFormat: multi
+        required: true
+        description: List of operations to apply.
+        example: ["textUpper", "wordCount"]
       - name: body
         in: body
         required: true
         schema:
           type: object
           properties:
-            operations:
-              type: array
-              items:
-                type: string
-              example: ["textUpper", "wordCount"]
             inputs:
               type: array
               items:
@@ -128,30 +140,27 @@ def process_data():
       200:
         description: Request processed successfully.
     """
+    # Extract data from both query string and JSON body
+    operations = request.args.getlist('operations')
     data = request.get_json()
 
     consolidated_results = []
 
-    # Loop through each item provided in your input array
     for current_text in data['inputs']:
         text_results = {}
-
-        # Run every requested tool engine on this specific text item
-        for op_name in data['operations']:
+        for op_name in operations:
             action = DICT_OF_OPERATIONS.get(op_name)
-
             if action:
                 text_results[op_name] = action(str(current_text))
             else:
                 text_results[op_name] = "Unsupported operation"
 
-        # Bundle it cleanly into the final report
         consolidated_results.append({
             "input_string": current_text,
             "results": text_results
         })
-        app.logger.info("📤 Request complete. Consolidated report dispatched successfully.")
 
+    app.logger.info("📤 Request complete. Consolidated report dispatched successfully.")
     return jsonify({
         "status": "success",
         "processed_metrics": consolidated_results
