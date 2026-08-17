@@ -3,7 +3,8 @@ from flasgger import Swagger
 from functools import wraps
 import os
 import logging
-from logging.handlers import RotatingFileHandler
+import tiktoken
+
 
 app = Flask(__name__)
 swagger = Swagger(app)
@@ -34,6 +35,15 @@ def textReverse(text: str) -> str:
 def textClean(text: str) -> str:
     """Trims starting and ending spaces."""
     return text.strip() if text else ""
+def textSplit(text: str) ->list:
+    """give the list of strings"""
+    return list(text.split())
+
+def count_openai_tokens(text: str, model_name: str = "gpt-4") -> int:
+    # Automatically get the correct encoding for the specified model
+    encoding = tiktoken.encoding_for_model(model_name)
+    num_tokens = len(encoding.encode(text))
+    return num_tokens
 
 
 # Simply add your new function names to this registry list to active them!
@@ -41,11 +51,13 @@ DICT_OF_OPERATIONS = {
     "wordCount": wordCount,
     "textUpper": textUpper,
     "textReverse": textReverse,
-    "textClean": textClean
+    "textClean": textClean,
+    "textSplit": textSplit,
+    "textTokenCounter":count_openai_tokens
 }
 
 # ==============================================================================
-# 🔒 GUARD LAYER (Handles Authentication & Missing Parameters automatically)
+# GUARD LAYER (Handles Authentication & Missing Parameters automatically)
 # ==============================================================================
 API_SECRET_KEY = os.getenv("API_SECRET_KEY", "my_secure_dev_key_123")
 
@@ -134,6 +146,7 @@ def process_data():
             "input_string": current_text,
             "results": text_results
         })
+        app.logger.info("📤 Request complete. Consolidated report dispatched successfully.")
 
     return jsonify({
         "status": "success",
