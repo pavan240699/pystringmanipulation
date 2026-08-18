@@ -115,7 +115,7 @@ def require_payload():
 # ==============================================================================
 @app.route('/', methods=['GET'])
 def Home():
-    return redirect(url_for('apidocs'))
+    return redirect(url_for('flasgger.apidocs'))
 
 
 @app.route('/api/process', methods=['POST'])
@@ -210,4 +210,4 @@ def process_data():
 
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5000, debug=None)
