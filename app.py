@@ -10,7 +10,7 @@ log_formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(
 
 
 # ==============================================================================
-# 🛠️ EDIT ZONE: ADD OR CHANGE YOUR OPERATIONS HERE
+#  EDIT ZONE: ADD OR CHANGE YOUR OPERATIONS HERE
 # ==============================================================================
 def wordCount(text: str) -> int:
     """Counts words."""
@@ -37,10 +37,11 @@ def textSplit(text: str) -> list:
     return list(text.split())
 
 
-def count_openai_tokens(text: str, model_name: str = "gpt-4") -> int:
+def count_openai_tokens(text: str, model_name: str = "gpt-4") -> object:
     encoding = tiktoken.encoding_for_model(model_name)
     num_tokens = len(encoding.encode(text))
-    return num_tokens
+
+    return {"Tokenised Text": list(encoding.encode(text)), "Number of tokens": num_tokens}
 
 
 DICT_OF_OPERATIONS = {
@@ -51,6 +52,7 @@ DICT_OF_OPERATIONS = {
     "textSplit": textSplit,
     "textTokenCounter": count_openai_tokens
 }
+enum_list= list(DICT_OF_OPERATIONS.keys())
 
 # ==============================================================================
 # GUARD LAYER (Handles Authentication & Missing Parameters automatically)
@@ -110,35 +112,55 @@ def Home():
 def process_data():
     """
     Process multiple items with multiple logic engines simultaneously.
+
+    ️ **Input Validation Rules:**
+    1. **Authentication**: A valid `X-API-Key` credential must be provided in the header.
+    2. **operations**: A query string array containing at least 1 engine option.
+    3. **inputs**: A JSON body array containing text items.
+       * Array cannot be empty.
+       * Each text string must be between **1 and 128 characters** long.
     ---
     parameters:
       - name: X-API-Key
         in: header
         type: string
         required: true
+        description: Private secret key to authorize access.
       - name: operations
         in: query
         type: array
         items:
           type: string
+          enum: ["wordCount", "textUpper", "textReverse", "textClean", "textSplit", "textTokenCounter"]
         collectionFormat: multi
         required: true
-        description: List of operations to apply.
-        example: ["textUpper", "wordCount"]
+        minItems: 1
+        description: List of transformation or analytical logic engines to execute. Select at least one.
+        example: ["textUpper", "textTokenCounter"]
       - name: body
         in: body
         required: true
         schema:
           type: object
+          required:
+            - inputs
           properties:
             inputs:
               type: array
+              minItems: 1
+              description: Non-empty array of strings. Individual strings must be 1-128 characters.
               items:
                 type: string
+                minLength: 1
+                maxLength: 128
               example: [" hello world ", "flask api"]
     responses:
       200:
-        description: Request processed successfully.
+        description: Request processed successfully. Returns execution metrics for each input.
+      400:
+        description: Validation error. Parameters missing or string length constraints violated.
+      401:
+        description: Unauthorized. Missing or invalid X-API-Key header.
     """
     # Extract data from both query string and JSON body
     operations = request.args.getlist('operations')
