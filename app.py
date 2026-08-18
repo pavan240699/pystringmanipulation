@@ -118,7 +118,7 @@ def Home():
     return redirect(url_for('flasgger.apidocs'))
 
 
-@app.route('/api/process', methods=['POST'])
+@app.route('/api/v1/process', methods=['POST'])
 @require_api_key
 @require_payload()
 def process_data():
@@ -165,7 +165,7 @@ def process_data():
                 type: string
                 minLength: 1
                 maxLength: 128
-              example: [" hello world ", "flask api"]
+              example: [" Hello barclays ", "Applied AI "]
     responses:
       200:
         description: Request processed successfully. Returns execution metrics for each input.
