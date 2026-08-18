@@ -4,9 +4,17 @@ from functools import wraps
 import os
 import logging
 import tiktoken
-
+import uuid
 app = Flask(__name__)
-log_formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
+log_formatter = logging.Formatter('[CRID: %(crid)s] %(levelname)s in %(module)s: %(message)s')
+
+handler = logging.StreamHandler()
+handler.setFormatter(log_formatter)
+
+base_logger = logging.getLogger("my_app")
+base_logger.setLevel(logging.INFO)
+base_logger.addHandler(handler)
+
 
 
 # ==============================================================================
@@ -65,6 +73,7 @@ def require_api_key(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if request.headers.get("X-API-Key") != API_SECRET_KEY:
+            logging.info("User tried wrong x-api-key",)
             return jsonify({"error": "Invalid or missing X-API-Key header"}), 401
         return f(*args, **kwargs)
 
@@ -76,6 +85,7 @@ def require_payload():
         @wraps(f)
         def decorated(*args, **kwargs):
             # 1. Validate operations from query parameters
+
             operations = request.args.getlist('operations')
             if not operations:
                 return jsonify({"error": "Query parameter 'operations' must be a non-empty array"}), 400
@@ -85,7 +95,9 @@ def require_payload():
             inputs = data.get('inputs')
 
             if not inputs or not isinstance(inputs, list):
+                logging.error("")
                 return jsonify({"error": "Field 'inputs' must be a non-empty array in the JSON body"}), 400
+
 
             for s in inputs:
                 if len(str(s)) > 128 or len(str(s)) == 0:
@@ -163,30 +175,38 @@ def process_data():
         description: Unauthorized. Missing or invalid X-API-Key header.
     """
     # Extract data from both query string and JSON body
-    operations = request.args.getlist('operations')
-    data = request.get_json()
+    try:
+        current_crid = str(uuid.uuid4())[:8]
+        logger = logging.LoggerAdapter(base_logger, {"crid": current_crid})
+        operations = request.args.getlist('operations')
+        data = request.get_json()
 
-    consolidated_results = []
+        consolidated_results = []
 
-    for current_text in data['inputs']:
-        text_results = {}
-        for op_name in operations:
-            action = DICT_OF_OPERATIONS.get(op_name)
-            if action:
-                text_results[op_name] = action(str(current_text))
-            else:
-                text_results[op_name] = "Unsupported operation"
 
-        consolidated_results.append({
-            "input_string": current_text,
-            "results": text_results
-        })
+        for current_text in data['inputs']:
+            text_results = {}
+            for op_name in operations:
+                action = DICT_OF_OPERATIONS.get(op_name)
+                if action:
+                    text_results[op_name] = action(str(current_text))
+                    logger.info(f'operation {op_name} was executed')
+                else:
+                    text_results[op_name] = "Unsupported operation"
+                    logger.error(f"User is trying {op_name} which does not exist")
 
-    app.logger.info("📤 Request complete. Consolidated report dispatched successfully.")
-    return jsonify({
-        "status": "success",
-        "processed_metrics": consolidated_results
-    }), 200
+            consolidated_results.append({
+                "input_string": current_text,
+                "results": text_results
+            })
+
+        app.logger.info("📤 Request complete. Consolidated report dispatched successfully.")
+        return jsonify({
+            "status": "success",
+            "processed_metrics": consolidated_results
+        }), 200 , {"CRID": current_crid}
+    except:
+        return jsonify({"error": "Internal Server Error"}), 500
 
 
 if __name__ == '__main__':
